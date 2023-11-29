@@ -89,13 +89,10 @@ int main() {
             }
         }
 
-        else if(IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && player1.isDragging){
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && player1.isDragging) {
             Vector2 mouse_drag_end = GetMousePosition();
-
-            if (CheckCollisionPointCircle(mouse_drag_start, player1.playerPos, player1.radius)) {
-                player1.velocity = Vector2Subtract(mouse_drag_start, mouse_drag_end);
-                player1.isDragging = false;
-            }
+            player1.velocity = Vector2Subtract(mouse_drag_start, mouse_drag_end);
+            player1.isDragging = false;
         }
 
         // Vector2 shot_dir = Vector2Subtract(mouse_position, mouse_drag_start);
