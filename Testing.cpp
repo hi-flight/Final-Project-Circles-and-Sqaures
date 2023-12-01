@@ -5,18 +5,68 @@ const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
 const float FRICTION = 0.99f;
 
-struct Base{ //Base Health 
+enum EnemyType {
+    GRUNT,
+    SPRINTER,
+    HEAVY,
+};
+
+struct Base { //Base Health 
     int health;
     Vector2 basePos;
 };
 
-struct Player{
+struct Player {
     bool isDragging;
     float radius;
     Vector2 velocity;
     Vector2 playerPos;
     Vector2 acceleration;
 };
+
+struct Enemy {
+    int enemyHealth;
+    int damage;
+    EnemyType type;
+    Color color;
+    Vector2 target;
+    Rectangle rect;
+    float speed;
+};
+
+Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type, Vector2 target) {
+    Enemy newEnemy;
+    newEnemy.rect = (Rectangle){(float)GetRandomValue(0, screenWidth - 30), (float)GetRandomValue(0, screenHeight - 30), 30, 30};
+    newEnemy.type = type;
+    newEnemy.enemyHealth = 1;
+    newEnemy.target = target;
+    switch (type) {
+        case GRUNT:
+            newEnemy.color = RED;
+            newEnemy.speed = 1.0f;
+            break;
+        case SPRINTER:
+            newEnemy.color = YELLOW;
+            newEnemy.speed = 2.0f;
+            break;
+        case HEAVY:
+            newEnemy.color = GRAY;
+            newEnemy.enemyHealth = 2;
+            newEnemy.speed = 0.5f;
+            break;
+    }
+    return newEnemy;
+}
+
+void updateEnemy (Enemy &enemy, Vector2 target) {
+    Vector2 direction = Vector2Normalize(Vector2Subtract(target, (Vector2){enemy.rect.x, enemy.rect.y}));
+    enemy.rect.x += direction.x * enemy.speed;
+    enemy.rect.y += direction.y * enemy.speed;
+}
+
+void drawEnemy (const Enemy &enemy) {
+    DrawRectangleRec(enemy.rect, enemy.color);
+}
 
 // Computes for impulse given the following parameters :
 // elasticity, relative velocity, collision normal, and the inverse masses of the two objects
@@ -62,6 +112,14 @@ int main() {
 
     Vector2 mouse_drag_start = Vector2Zero();
     SetTargetFPS(60); // Set the target frame rate
+
+    playerBase.basePos = {screenWidth / 2, screenHeight / 2};
+
+    Enemy enemies[3];
+    for (int i = 0; i < 3; ++i) {
+        enemies[i] = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+    }
+
     while (!WindowShouldClose()) {
         float delta_time = GetFrameTime();
 
@@ -112,6 +170,10 @@ int main() {
             accumulator -= TIMESTEP;
         }
 
+        for (int i = 0; i < 3; ++i) {
+            updateEnemy(enemies[i], player1.playerPos);
+        }
+
         BeginDrawing();
         ClearBackground(BLACK);
         // DrawCircle(screenWidth / 2, screenHeight / 2, 75.0f, YELLOW); // Base
@@ -121,6 +183,11 @@ int main() {
             //Vector2 mouse_drag_vector = Vector2Scale(shot_dir, shot_vector_distance);
             //DrawLineEx(mouse_drag_start, mouse_drag_end, 2, RED);
         }
+
+        for (int i = 0; i < 3; ++i) {
+            drawEnemy(enemies[i]);
+        }
+
         EndDrawing();
     }
 
