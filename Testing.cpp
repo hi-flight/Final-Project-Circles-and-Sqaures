@@ -53,16 +53,16 @@ Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type
     switch (type) {
         case GRUNT:
             newEnemy.color = RED;
-            newEnemy.speed = 1.0f;
+            newEnemy.speed = 0.75f;
             break;
         case SPRINTER:
             newEnemy.color = YELLOW;
-            newEnemy.speed = 1.5f;
+            newEnemy.speed = 1.0f;
             break;
         case HEAVY:
             newEnemy.color = GRAY;
             newEnemy.enemyHealth = 2;
-            newEnemy.speed = 0.5f;
+            newEnemy.speed = 0.25f;
             break;
     }
     return newEnemy;
