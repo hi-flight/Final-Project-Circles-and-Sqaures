@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include <raymath.h>
+#include <vector>
 
 const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
@@ -13,6 +14,7 @@ enum EnemyType {
 
 struct Base { //Base Health 
     int health;
+    float radius;
     Vector2 basePos;
 };
 
@@ -31,14 +33,23 @@ struct Enemy {
     Vector2 target;
     Rectangle rect;
     float speed;
+    float hitCooldown;
 };
 
 Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type, Vector2 target) {
+    float safeDistance = 200.0f;
+    Vector2 spawnPos;
+
+    do {
+        spawnPos = (Vector2){(float)GetRandomValue(30, screenWidth - 30), (float)GetRandomValue(30, screenHeight - 30)};
+    } while (Vector2Distance(spawnPos, target) < safeDistance);
+
     Enemy newEnemy;
-    newEnemy.rect = (Rectangle){(float)GetRandomValue(0, screenWidth - 30), (float)GetRandomValue(0, screenHeight - 30), 30, 30};
+    newEnemy.rect = (Rectangle){spawnPos.x, spawnPos.y, 30, 30};
     newEnemy.type = type;
     newEnemy.enemyHealth = 1;
     newEnemy.target = target;
+    newEnemy.hitCooldown = 0.0f;
     switch (type) {
         case GRUNT:
             newEnemy.color = RED;
@@ -63,20 +74,22 @@ void updateEnemy (Enemy &enemy, Vector2 target) {
     enemy.rect.y += direction.y * enemy.speed;
 }
 
-void health (Enemy &enemy, const Player &player, float deltaTime) {
-    static float hitCooldown = 0.0f;
-    const float hitCooldownTime = 0.5f;
-
+void health (Enemy &enemy, const Player &player, Base &base, float deltaTime) {
     Rectangle playerRect = {(player.playerPos.x - player.radius), (player.playerPos.y - player.radius), player.radius * 2, player.radius * 2};
 
-    if (hitCooldown <= 0.0f && CheckCollisionRecs(playerRect, enemy.rect)) {
+    if (CheckCollisionCircleRec(base.basePos, base.radius, enemy.rect)) {
+        enemy.enemyHealth = 0;
+        base.health--;
+    } 
+    else if (enemy.hitCooldown <= 0.0f && CheckCollisionRecs(playerRect, enemy.rect)) {
         enemy.enemyHealth--;
-        hitCooldown = hitCooldownTime;
+        enemy.hitCooldown = 0.5f;
     }
 
-    if (hitCooldown > 0.0f) {
-        hitCooldown -= deltaTime;
+    if (enemy.hitCooldown > 0.0f) {
+        enemy.hitCooldown -= deltaTime;
     }
+
 }
 
 void drawEnemy (const Enemy &enemy) {
@@ -118,6 +131,7 @@ int main() {
     const int screenHeight = 600;
 
     playerBase.health = 3;
+    playerBase.radius = 25.0f;
     player1.radius = 20.0f;
     player1.isDragging = false;
     player1.playerPos = {400,300};
@@ -186,8 +200,8 @@ int main() {
         }
 
         for (int i = 0; i < 3; ++i) {
-            updateEnemy(enemies[i], player1.playerPos);
-            health(enemies[i], player1, delta_time);
+            updateEnemy(enemies[i], playerBase.basePos);
+            health(enemies[i], player1, playerBase, delta_time);
 
             if (enemies[i].enemyHealth <= 0) {
                 enemies[i] = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
@@ -198,6 +212,9 @@ int main() {
         ClearBackground(BLACK);
         // DrawCircle(screenWidth / 2, screenHeight / 2, 75.0f, YELLOW); // Base
         DrawCircleV(player1.playerPos, player1.radius, RED);
+        if (playerBase.health > 0) {
+            DrawCircleLines(playerBase.basePos.x, playerBase.basePos.y, playerBase.radius, RED);
+        }
         
         if (player1.isDragging) {
             //Vector2 mouse_drag_vector = Vector2Scale(shot_dir, shot_vector_distance);
