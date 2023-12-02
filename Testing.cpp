@@ -37,7 +37,7 @@ struct Enemy {
 };
 
 Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type, Vector2 target) {
-    float safeDistance = 200.0f;
+    float safeDistance = 300.0f;
     Vector2 spawnPos;
 
     do {
@@ -57,7 +57,7 @@ Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type
             break;
         case SPRINTER:
             newEnemy.color = YELLOW;
-            newEnemy.speed = 2.0f;
+            newEnemy.speed = 1.5f;
             break;
         case HEAVY:
             newEnemy.color = GRAY;
@@ -144,13 +144,17 @@ int main() {
 
     playerBase.basePos = {screenWidth / 2, screenHeight / 2};
 
-    Enemy enemies[3];
+    std::vector<Enemy> enemies;
     for (int i = 0; i < 3; ++i) {
-        enemies[i] = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+        enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
     }
+
+    float spawnTimer = 0.0f;
+    const float spawnInterval = 10.0f;
 
     while (!WindowShouldClose()) {
         float delta_time = GetFrameTime();
+        spawnTimer += delta_time;
 
         Vector2 mouse_position = GetMousePosition();
         Vector2 cue_stick_force = Vector2Zero();
@@ -199,12 +203,19 @@ int main() {
             accumulator -= TIMESTEP;
         }
 
-        for (int i = 0; i < 3; ++i) {
-            updateEnemy(enemies[i], playerBase.basePos);
-            health(enemies[i], player1, playerBase, delta_time);
+        if (spawnTimer >= spawnInterval) {
+            spawnTimer = 0.0f;
+            for (int i = 0; i < 1; i++) {
+                enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
+            }
+        }
 
-            if (enemies[i].enemyHealth <= 0) {
-                enemies[i] = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+        for (Enemy &enemy : enemies) {
+            updateEnemy(enemy, playerBase.basePos);
+            health(enemy, player1, playerBase, delta_time);
+
+            if (enemy.enemyHealth <= 0) {
+                enemy = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
             }
         }
 
@@ -221,10 +232,9 @@ int main() {
             //DrawLineEx(mouse_drag_start, mouse_drag_end, 2, RED);
         }
 
-        for (int i = 0; i < 3; ++i) {
-            if (enemies[i].enemyHealth > 0)
-            {
-                drawEnemy(enemies[i]);
+        for (const Enemy &enemy : enemies) {
+            if (enemy.enemyHealth > 0) {
+                drawEnemy(enemy);
             }
         }
 
