@@ -26,7 +26,6 @@ struct Player {
 
 struct Enemy {
     int enemyHealth;
-    int damage;
     EnemyType type;
     Color color;
     Vector2 target;
@@ -62,6 +61,22 @@ void updateEnemy (Enemy &enemy, Vector2 target) {
     Vector2 direction = Vector2Normalize(Vector2Subtract(target, (Vector2){enemy.rect.x, enemy.rect.y}));
     enemy.rect.x += direction.x * enemy.speed;
     enemy.rect.y += direction.y * enemy.speed;
+}
+
+void health (Enemy &enemy, const Player &player, float deltaTime) {
+    static float hitCooldown = 0.0f;
+    const float hitCooldownTime = 0.5f;
+
+    Rectangle playerRect = {(player.playerPos.x - player.radius), (player.playerPos.y - player.radius), player.radius * 2, player.radius * 2};
+
+    if (hitCooldown <= 0.0f && CheckCollisionRecs(playerRect, enemy.rect)) {
+        enemy.enemyHealth--;
+        hitCooldown = hitCooldownTime;
+    }
+
+    if (hitCooldown > 0.0f) {
+        hitCooldown -= deltaTime;
+    }
 }
 
 void drawEnemy (const Enemy &enemy) {
@@ -172,6 +187,11 @@ int main() {
 
         for (int i = 0; i < 3; ++i) {
             updateEnemy(enemies[i], player1.playerPos);
+            health(enemies[i], player1, delta_time);
+
+            if (enemies[i].enemyHealth <= 0) {
+                enemies[i] = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+            }
         }
 
         BeginDrawing();
@@ -185,7 +205,10 @@ int main() {
         }
 
         for (int i = 0; i < 3; ++i) {
-            drawEnemy(enemies[i]);
+            if (enemies[i].enemyHealth > 0)
+            {
+                drawEnemy(enemies[i]);
+            }
         }
 
         EndDrawing();
