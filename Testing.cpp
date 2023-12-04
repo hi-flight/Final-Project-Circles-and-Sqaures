@@ -1,10 +1,12 @@
 #include "raylib.h"
 #include <raymath.h>
 #include <vector>
+#include <string>
 
 const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
 const float FRICTION = 0.99f;
+int score = 0;
 
 enum EnemyType {
     GRUNT,
@@ -122,6 +124,20 @@ void drawEnemy (const Enemy &enemy) {
 //     }
 // };
 
+void DrawHealthBar(int x, int y, int width, int height, int currentHealth, int maxHealth, Color barColor, Color borderColor) {
+    // Draw the border
+    DrawRectangle(x - 2, y - 2, width + 4, height + 4, borderColor);
+
+    // Calculate the percentage of health remaining
+    float healthPercentage = (float)currentHealth / maxHealth;
+
+    // Calculate the width of the colored portion of the health bar
+    int barWidth = (int)(width * healthPercentage);
+
+    // Draw the colored portion of the health bar
+    DrawRectangle(x, y, barWidth, height, barColor);
+}
+
 int main() {
     Base playerBase;
     Player player1;
@@ -216,17 +232,22 @@ int main() {
 
             if (enemy.enemyHealth <= 0) {
                 enemy = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+                score += 10;
             }
         }
 
         BeginDrawing();
         ClearBackground(BLACK);
+
         // DrawCircle(screenWidth / 2, screenHeight / 2, 75.0f, YELLOW); // Base
         DrawCircleV(player1.playerPos, player1.radius, RED);
+
         if (playerBase.health > 0) {
             DrawCircleLines(playerBase.basePos.x, playerBase.basePos.y, playerBase.radius, RED);
-        }
         
+            DrawHealthBar(playerBase.basePos.x - playerBase.radius, playerBase.basePos.y + playerBase.radius + 10, playerBase.radius * 2, 10, playerBase.health, 3, RED, BLACK);
+        }
+
         if (player1.isDragging) {
             //Vector2 mouse_drag_vector = Vector2Scale(shot_dir, shot_vector_distance);
             //DrawLineEx(mouse_drag_start, mouse_drag_end, 2, RED);
@@ -238,6 +259,7 @@ int main() {
             }
         }
 
+        DrawText(TextFormat("Score: %d", score), 30, 30, 20, WHITE);
         EndDrawing();
     }
 
