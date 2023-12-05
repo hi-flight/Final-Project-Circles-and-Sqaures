@@ -14,6 +14,29 @@ enum EnemyType {
     HEAVY,
 };
 
+enum PowerUpType {
+    HEAL_BASE,
+    UP_PLAYER_SIZE,
+    INCREASE_SCORE1,
+    INCREASE_SCORE2,
+};
+
+struct PowerUp {
+    PowerUpType type;
+    Vector2 position;
+    float duration;
+};
+
+std::vector<PowerUp> powerUps;
+
+PowerUp createPowerUp(const int screenWidth, const int screenHeight) {
+    PowerUp newPowerUp;
+    newPowerUp.type = static_cast<PowerUpType>(GetRandomValue(0, 3));
+    newPowerUp.position = {(float)GetRandomValue(30, screenWidth - 30), (float)GetRandomValue(30, screenHeight - 30)};
+    newPowerUp.duration = 5.0f; // Adjust duration as needed
+    return newPowerUp;
+}
+
 struct Base { //Base Health 
     int health;
     float radius;
@@ -23,6 +46,7 @@ struct Base { //Base Health
 struct Player {
     bool isDragging;
     float radius;
+    float originalRadius;
     Vector2 velocity;
     Vector2 playerPos;
     Vector2 acceleration;
@@ -38,25 +62,8 @@ struct Enemy {
     float hitCooldown;
 };
 
-Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target) {
-    const int gruntSpawn = 60;
-    const int sprinterSpawn = 30;
-    const int heavySpawn = 10;
-
-    int randomValue = GetRandomValue(1, 100);
-
-    EnemyType type;
-    if (randomValue <= gruntSpawn) {
-        type = GRUNT;
-    }
-    else if (randomValue <= gruntSpawn + sprinterSpawn) {
-        type = SPRINTER;
-    }
-    else {
-        type = HEAVY;
-    }
-
-    float safeDistance = 400.0f;
+Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type, Vector2 target) {
+    float safeDistance = 300.0f;
     Vector2 spawnPos;
 
     do {
@@ -115,6 +122,22 @@ void drawEnemy (const Enemy &enemy) {
     DrawRectangleRec(enemy.rect, enemy.color);
 }
 
+void applyPowerUp(Player& player, Base& base, std::vector<Enemy>& enemies, const PowerUp& powerUp) {
+    switch (powerUp.type) {
+        case HEAL_BASE:
+            base.health = 3;
+            break;
+        case UP_PLAYER_SIZE:
+            player.radius *= 1.1f;
+            break;
+        case INCREASE_SCORE1:
+            score += 100;
+            break;
+        case INCREASE_SCORE2:
+            score += 1000;
+            break;
+    }
+}
 // Computes for impulse given the following parameters :
 // elasticity, relative velocity, collision normal, and the inverse masses of the two objects
 // float GetImpulse(float elasticity, Vector2 relative_velocity, Vector2 collision_normal, float inverse_mass_a, float inverse_mass_b) {
@@ -160,11 +183,12 @@ int main() {
     Player player1;
  
     float accumulator = 0;
+    const float maxAccumulator = 0.1f;
     const int screenWidth = 800;
     const int screenHeight = 600;
 
     playerBase.health = 3;
-    playerBase.radius = 25.0f;
+    playerBase.radius = 50.0f;
     player1.radius = 20.0f;
     player1.isDragging = false;
     player1.playerPos = {400,300};
@@ -179,7 +203,7 @@ int main() {
 
     std::vector<Enemy> enemies;
     for (int i = 0; i < 3; ++i) {
-        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
+        enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
     }
 
     float spawnTimer = 0.0f;
@@ -192,17 +216,20 @@ int main() {
         Vector2 mouse_position = GetMousePosition();
         Vector2 cue_stick_force = Vector2Zero();
 
-        if(player1.playerPos.x - 10 < 0){
+        if (player1.playerPos.x - player1.radius < 0 || player1.playerPos.x + player1.radius > screenWidth) {
             player1.velocity.x *= -1;
+            player1.playerPos.x = Clamp(player1.playerPos.x, player1.radius, screenWidth - player1.radius);
         }
-        if(player1.playerPos.x + 10 > 800){
-            player1.velocity.x *= -1;
-        }
-        if(player1.playerPos.y - 10 < 0){
+
+        if (player1.playerPos.y - player1.radius < 0 || player1.playerPos.y + player1.radius > screenHeight) {
             player1.velocity.y *= -1;
+            player1.playerPos.y = Clamp(player1.playerPos.y, player1.radius, screenHeight - player1.radius);
         }
-        if(player1.playerPos.y + 10 > 600){
-            player1.velocity.y *= -1;
+
+        if (player1.playerPos.x - player1.radius < 0 || player1.playerPos.x + player1.radius > screenWidth ||
+            player1.playerPos.y - player1.radius < 0 || player1.playerPos.y + player1.radius > screenHeight) {
+
+            player1.playerPos = {400,300};
         }
 
         if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -239,7 +266,7 @@ int main() {
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0.0f;
             for (int i = 0; i < 1; i++) {
-                enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
+                enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
             }
         }
 
@@ -248,8 +275,51 @@ int main() {
             health(enemy, player1, playerBase, delta_time);
 
             if (enemy.enemyHealth <= 0) {
-                enemy = createEnemy(screenWidth, screenHeight, playerBase.basePos);
+                enemy = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
                 score += 10;
+            }
+        }
+
+        if (GetRandomValue(0, 1000) < 5) { // Adjust the probability as needed
+            powerUps.push_back(createPowerUp(screenWidth, screenHeight));
+        }
+
+        for (auto it = powerUps.begin(); it != powerUps.end(); /* no increment here */) {
+            if (CheckCollisionCircleRec(player1.playerPos, player1.radius, {it->position.x, it->position.y, 10, 10})) {
+                applyPowerUp(player1, playerBase, enemies, *it);
+                it = powerUps.erase(it);
+            } else {
+                it++;
+            }
+        }
+
+        for (auto it = powerUps.begin(); it != powerUps.end(); /* no increment here */) {
+            it->duration -= delta_time;
+            if (it->duration <= 0.0f) {
+                it = powerUps.erase(it);
+            } else {
+                it++;
+            }
+        }
+
+        for (const PowerUp &powerUp : powerUps) {
+            // Draw different shapes or symbols based on the power-up type
+            switch (powerUp.type) {
+                case HEAL_BASE:
+                    DrawCircleV(powerUp.position, 10, GREEN); // Green circle for heal
+                    break;
+                case UP_PLAYER_SIZE:
+                    if (player1.radius <= 40.0f){
+                        DrawRectangleV(Vector2{ powerUp.position.x - 5, powerUp.position.y - 5 }, Vector2{ 20, 20 }, BLUE);
+                    }
+                    break;
+                case INCREASE_SCORE1:
+                    DrawTriangle({ powerUp.position.x - 5, powerUp.position.y + 5 }, { powerUp.position.x + 5, powerUp.position.y + 5 }, { powerUp.position.x, powerUp.position.y - 5 }, PURPLE); // Purple triangle for immunity
+                    break;
+                case INCREASE_SCORE2:
+                    DrawLineV({ powerUp.position.x - 5, powerUp.position.y - 5 }, { powerUp.position.x + 5, powerUp.position.y + 5 }, ORANGE); // Orange line for freeze
+                    DrawLineV({ powerUp.position.x - 5, powerUp.position.y + 5 }, { powerUp.position.x + 5, powerUp.position.y - 5 }, ORANGE);
+                    break;
             }
         }
 
@@ -265,10 +335,10 @@ int main() {
             DrawHealthBar(playerBase.basePos.x - playerBase.radius, playerBase.basePos.y + playerBase.radius + 10, playerBase.radius * 2, 10, playerBase.health, 3, RED, BLACK);
         }
 
-        if (player1.isDragging) {
-            //Vector2 mouse_drag_vector = Vector2Scale(shot_dir, shot_vector_distance);
-            //DrawLineEx(mouse_drag_start, mouse_drag_end, 2, RED);
-        }
+        // if (player1.isDragging) {
+        //     //Vector2 mouse_drag_vector = Vector2Scale(shot_dir, shot_vector_distance);
+        //     //DrawLineEx(mouse_drag_start, mouse_drag_end, 2, RED);
+        // }
 
         for (const Enemy &enemy : enemies) {
             if (enemy.enemyHealth > 0) {
