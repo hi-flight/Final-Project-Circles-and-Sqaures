@@ -38,8 +38,25 @@ struct Enemy {
     float hitCooldown;
 };
 
-Enemy createEnemy (const int screenWidth, const int screenHeight, EnemyType type, Vector2 target) {
-    float safeDistance = 300.0f;
+Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target) {
+    const int gruntSpawn = 60;
+    const int sprinterSpawn = 30;
+    const int heavySpawn = 10;
+
+    int randomValue = GetRandomValue(1, 100);
+
+    EnemyType type;
+    if (randomValue <= gruntSpawn) {
+        type = GRUNT;
+    }
+    else if (randomValue <= gruntSpawn + sprinterSpawn) {
+        type = SPRINTER;
+    }
+    else {
+        type = HEAVY;
+    }
+
+    float safeDistance = 400.0f;
     Vector2 spawnPos;
 
     do {
@@ -162,7 +179,7 @@ int main() {
 
     std::vector<Enemy> enemies;
     for (int i = 0; i < 3; ++i) {
-        enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
+        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
     }
 
     float spawnTimer = 0.0f;
@@ -222,7 +239,7 @@ int main() {
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0.0f;
             for (int i = 0; i < 1; i++) {
-                enemies.push_back(createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos));
+                enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
             }
         }
 
@@ -231,7 +248,7 @@ int main() {
             health(enemy, player1, playerBase, delta_time);
 
             if (enemy.enemyHealth <= 0) {
-                enemy = createEnemy(screenWidth, screenHeight, static_cast<EnemyType>(GetRandomValue(0, 2)), playerBase.basePos);
+                enemy = createEnemy(screenWidth, screenHeight, playerBase.basePos);
                 score += 10;
             }
         }
