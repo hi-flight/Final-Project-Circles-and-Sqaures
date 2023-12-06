@@ -519,6 +519,7 @@ int main() {
                     spawnTimer = 0.0f;
                     player1.velocity = {0, 0};
                     player1.acceleration = {0, 0};
+                    player1.radius = 20.0f;
                     gameOverSoundPlayed = false;
                     enemies.clear();
                     for (int i = 0; i < 3; ++i) {
