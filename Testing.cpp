@@ -6,6 +6,8 @@
 const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
 const float FRICTION = 0.99f;
+
+bool gameOverSoundPlayed = false;
 int score = 0;
 
 enum EnemyType {
@@ -196,6 +198,18 @@ void DrawHealthBar(int x, int y, int width, int height, int currentHealth, int m
 }
 
 int main() {
+    InitAudioDevice();
+
+    Sound BGM = LoadSound("BGM.ogg");
+    Sound SFX1 = LoadSound("ShootSFX.ogg");
+    Sound SFX2 = LoadSound("DieSFX.ogg");
+    Sound SFX3 = LoadSound("PowerupSFX.ogg");
+    Sound SFX4 = LoadSound("WallHitSFX.ogg");
+    Sound SFX5 = LoadSound("KillSFX.ogg");
+
+    SetSoundVolume(BGM, 0.7f);
+    SetSoundVolume(SFX3, 0.5f);
+
     Base playerBase;
     Player player1;
 
@@ -237,8 +251,16 @@ int main() {
         float delta_time = GetFrameTime();
         spawnTimer += delta_time;
 
+        if(!IsSoundPlaying(BGM)){
+            PlaySound(BGM);
+        }
+        
         if (playerBase.health <= 0) {
             isGameOver = true;
+            if(!gameOverSoundPlayed){
+                PlaySound(SFX2);
+                gameOverSoundPlayed = true;
+            }
             gameOverDelay -= delta_time;
         }
 
@@ -247,11 +269,13 @@ int main() {
             Vector2 cue_stick_force = Vector2Zero();
 
             if (player1.playerPos.x - player1.radius < 0 || player1.playerPos.x + player1.radius > screenWidth) {
+                PlaySound(SFX4);
                 player1.velocity.x *= -1;
                 player1.playerPos.x = Clamp(player1.playerPos.x, player1.radius, screenWidth - player1.radius);
             }
 
             if (player1.playerPos.y - player1.radius < 0 || player1.playerPos.y + player1.radius > screenHeight) {
+                PlaySound(SFX4);
                 player1.velocity.y *= -1;
                 player1.playerPos.y = Clamp(player1.playerPos.y, player1.radius, screenHeight - player1.radius);
             }
@@ -274,6 +298,7 @@ int main() {
                 Vector2 mouse_drag_end = GetMousePosition();
                 player1.velocity = Vector2Subtract(mouse_drag_start, mouse_drag_end);
                 player1.isDragging = false;
+                PlaySound(SFX1);
             }
 
             // Vector2 shot_dir = Vector2Subtract(mouse_position, mouse_drag_start);
@@ -305,6 +330,7 @@ int main() {
                 health(enemy, player1, playerBase, delta_time);
 
                 if (enemy.enemyHealth <= 0) {
+                    PlaySound(SFX5);
                     enemy = createEnemy(screenWidth, screenHeight, playerBase.basePos);
                     score += 10;
                 }
@@ -320,6 +346,7 @@ int main() {
 
             for (auto it = powerUps.begin(); it != powerUps.end(); /* no increment here */) {
                 if (CheckCollisionCircleRec(player1.playerPos, player1.radius, {it->position.x, it->position.y, 10, 10})) {
+                    PlaySound(SFX3);
                     applyPowerUp(player1, playerBase, enemies, *it);
                     it = powerUps.erase(it);
                 } else {
@@ -411,6 +438,13 @@ int main() {
 
         EndDrawing();
     }
+    UnloadSound(BGM);
+    UnloadSound(SFX1);
+    UnloadSound(SFX2);
+    UnloadSound(SFX3);
+    UnloadSound(SFX4);
+    UnloadSound(SFX5);
+    CloseAudioDevice();
 
     CloseWindow();
 
