@@ -6,7 +6,7 @@
 const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
 const float FRICTION = 0.99f;
-
+float speedIncrement = 0.1f;
 bool gameOverSoundPlayed = false;
 int score = 0;
 
@@ -113,8 +113,9 @@ Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target
     return newEnemy;
 }
 
-void updateEnemy (Enemy &enemy, Vector2 target) {
+void updateEnemy (Enemy &enemy, Vector2 target, float deltaTime) {
     Vector2 direction = Vector2Normalize(Vector2Subtract(target, (Vector2){enemy.rect.x, enemy.rect.y}));
+    enemy.speed += speedIncrement * deltaTime;
     enemy.rect.x += direction.x * enemy.speed;
     enemy.rect.y += direction.y * enemy.speed;
 }
@@ -147,7 +148,9 @@ void applyPowerUp(Player& player, Base& base, std::vector<Enemy>& enemies, const
             base.health = 3;
             break;
         case UP_PLAYER_SIZE:
-            player.radius *= 1.1f;
+            if(player.radius <= 40.0f){
+                player.radius *= 1.1f;
+            }
             break;
         case INCREASE_SCORE1:
             score += 100;
@@ -326,7 +329,7 @@ int main() {
             }
 
             for (Enemy &enemy : enemies) {
-                updateEnemy(enemy, playerBase.basePos);
+                updateEnemy(enemy, playerBase.basePos, delta_time);
                 health(enemy, player1, playerBase, delta_time);
 
                 if (enemy.enemyHealth <= 0) {
@@ -421,6 +424,7 @@ int main() {
                 Vector2 mousePosition = GetMousePosition();
                 if (CheckCollisionPointRec(mousePosition, restartButton)) {
                     score = 0;
+                    player1.radius = 20.0f;
                     playerBase.health = 3;
                     player1.playerPos = {screenWidth / 2.0f, screenHeight / 2.0f};
                     isGameOver = false;
