@@ -329,11 +329,9 @@ int main() {
             }
 
             for (Enemy &enemy : enemies) {
-<<<<<<< HEAD
                 updateEnemy(enemy, playerBase.basePos, delta_time);
-=======
                 updateEnemy(enemy, playerBase.basePos);
->>>>>>> parent of 7ca7128 (SPRITE ANIMATION WHAT NOT)
+
                 health(enemy, player1, playerBase, delta_time);
 
                 if (enemy.enemyHealth <= 0) {
