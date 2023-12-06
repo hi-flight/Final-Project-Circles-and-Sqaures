@@ -6,7 +6,12 @@
 const float FPS = 60;
 const float TIMESTEP = 1.0f / FPS;
 const float FRICTION = 0.99f;
+
+float speedIncrement = 0.1f;
+bool gameOverSoundPlayed = false;
 int score = 0;
+
+Sound SFX6;
 
 enum EnemyType {
     GRUNT,
@@ -18,13 +23,14 @@ enum PowerUpType {
     HEAL_BASE,
     UP_PLAYER_SIZE,
     INCREASE_SCORE1,
-    INCREASE_SCORE2,
+    SLOW,
 };
 
 struct PowerUp {
     PowerUpType type;
     Vector2 position;
     float duration;
+    float slowFactor;
 };
 
 std::vector<PowerUp> powerUps;
@@ -34,6 +40,12 @@ PowerUp createPowerUp(const int screenWidth, const int screenHeight) {
     newPowerUp.type = static_cast<PowerUpType>(GetRandomValue(0, 3));
     newPowerUp.position = {(float)GetRandomValue(30, screenWidth - 30), (float)GetRandomValue(30, screenHeight - 30)};
     newPowerUp.duration = 5.0f; // Adjust duration as needed
+
+    if (newPowerUp.type == SLOW) {
+        newPowerUp.slowFactor = 0.5f; // Adjust the slow factor as needed
+    } else {
+        newPowerUp.slowFactor = 1.0f; // Default value for other power-ups
+    }
     return newPowerUp;
 }
 
@@ -52,6 +64,20 @@ struct Player {
     Vector2 acceleration;
 };
 
+struct AnimationFrame {
+    Rectangle frameRec;
+    Vector2 position;
+    float updateTime;
+    float runningTime;
+};
+
+struct Animation {
+    Texture2D spriteSheet;
+    AnimationFrame* frames;
+    int frameCount;
+    int currentFrame;
+};
+
 struct Enemy {
     int enemyHealth;
     EnemyType type;
@@ -60,9 +86,10 @@ struct Enemy {
     Rectangle rect;
     float speed;
     float hitCooldown;
+    Animation animation;
 };
 
-Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target) {
+Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target, Animation& gruntAnim, Animation& sprinterAnim, Animation& heavyAnim) {
     const int gruntSpawn = 60;
     const int sprinterSpawn = 30;
     const int heavySpawn = 10;
@@ -95,14 +122,17 @@ Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target
     newEnemy.hitCooldown = 0.0f;
     switch (type) {
         case GRUNT:
+            newEnemy.animation = gruntAnim;
             newEnemy.color = RED;
             newEnemy.speed = 0.75f;
             break;
         case SPRINTER:
+            newEnemy.animation = sprinterAnim;
             newEnemy.color = YELLOW;
             newEnemy.speed = 1.0f;
             break;
         case HEAVY:
+            newEnemy.animation = heavyAnim;
             newEnemy.color = GRAY;
             newEnemy.enemyHealth = 2;
             newEnemy.speed = 0.25f;
@@ -111,8 +141,9 @@ Enemy createEnemy (const int screenWidth, const int screenHeight, Vector2 target
     return newEnemy;
 }
 
-void updateEnemy (Enemy &enemy, Vector2 target) {
+void updateEnemy (Enemy &enemy, Vector2 target, float deltaTime) {
     Vector2 direction = Vector2Normalize(Vector2Subtract(target, (Vector2){enemy.rect.x, enemy.rect.y}));
+    enemy.speed += speedIncrement * deltaTime;
     enemy.rect.x += direction.x * enemy.speed;
     enemy.rect.y += direction.y * enemy.speed;
 }
@@ -121,6 +152,7 @@ void health (Enemy &enemy, const Player &player, Base &base, float deltaTime) {
     Rectangle playerRect = {(player.playerPos.x - player.radius), (player.playerPos.y - player.radius), player.radius * 2, player.radius * 2};
 
     if (CheckCollisionCircleRec(base.basePos, base.radius, enemy.rect)) {
+        PlaySound(SFX6);
         enemy.enemyHealth = 0;
         base.health--;
     } 
@@ -135,10 +167,6 @@ void health (Enemy &enemy, const Player &player, Base &base, float deltaTime) {
 
 }
 
-void drawEnemy (const Enemy &enemy) {
-    DrawRectangleRec(enemy.rect, enemy.color);
-}
-
 void applyPowerUp(Player& player, Base& base, std::vector<Enemy>& enemies, const PowerUp& powerUp) {
     switch (powerUp.type) {
         case HEAL_BASE:
@@ -150,10 +178,62 @@ void applyPowerUp(Player& player, Base& base, std::vector<Enemy>& enemies, const
         case INCREASE_SCORE1:
             score += 100;
             break;
-        case INCREASE_SCORE2:
-            score += 1000;
+        case SLOW:
+            for (Enemy& enemy : enemies) {
+                enemy.speed *= powerUp.slowFactor;
+            }
             break;
     }
+}
+
+void InitAnimation(Animation* anim, Texture2D spriteSheet, int frameCount, int frameWidth, int frameHeight) {
+    anim->spriteSheet = spriteSheet;
+    anim->frames = (AnimationFrame*)malloc(frameCount * sizeof(AnimationFrame));
+    anim->frameCount = frameCount;
+    anim->currentFrame = 0;
+
+    for (int i = 0; i < frameCount; ++i) {
+        anim->frames[i].frameRec = (Rectangle){static_cast<float>(frameWidth * i), 0.0f, static_cast<float>(frameWidth), static_cast<float>(frameHeight)};
+        anim->frames[i].updateTime = 1.0f / 12.0f; // Example frame rate
+        anim->frames[i].runningTime = 0.0f;
+    }
+}
+
+void UpdateAnimation(Animation* anim, Enemy& enemy, float deltaTime) {
+    anim->frames[anim->currentFrame].runningTime += deltaTime;
+
+    if (anim->frames[anim->currentFrame].runningTime >= anim->frames[anim->currentFrame].updateTime) {
+        anim->frames[anim->currentFrame].runningTime = 0.0f;
+
+        if (enemy.type == HEAVY) {
+            if (enemy.enemyHealth == 2) {
+                // Limit to the first two frames
+                anim->currentFrame = (anim->currentFrame + 1) % 2;
+            } else if (enemy.enemyHealth == 1) {
+                
+                // Use frames 3 and 4 (index 2 and 3)
+                anim->currentFrame = 2 + ((anim->currentFrame - 2 + 1) % 2);
+            }
+        } else {
+            anim->currentFrame = (anim->currentFrame + 1) % anim->frameCount;
+        }
+    }
+}
+
+
+void drawEnemy(const Enemy &enemy) {
+    AnimationFrame frame = enemy.animation.frames[enemy.animation.currentFrame];
+    
+    Rectangle destRec = {enemy.rect.x, enemy.rect.y, enemy.rect.width, enemy.rect.height};
+
+    DrawTexturePro(
+        enemy.animation.spriteSheet, 
+        frame.frameRec, 
+        destRec, 
+        Vector2{0, 0},
+        0.0f,
+        WHITE
+    );
 }
 // Computes for impulse given the following parameters :
 // elasticity, relative velocity, collision normal, and the inverse masses of the two objects
@@ -196,8 +276,22 @@ void DrawHealthBar(int x, int y, int width, int height, int currentHealth, int m
 }
 
 int main() {
+    InitAudioDevice();
+
+    Sound BGM = LoadSound("BGM.ogg");
+    Sound SFX1 = LoadSound("ShootSFX.ogg");
+    Sound SFX2 = LoadSound("DieSFX.ogg");
+    Sound SFX3 = LoadSound("PowerupSFX.ogg");
+    Sound SFX4 = LoadSound("WallHitSFX.ogg");
+    Sound SFX5 = LoadSound("KillSFX.ogg");
+    SFX6 = LoadSound("HeavyDMGSFX.ogg");
+
+    SetSoundVolume(BGM, 0.7f);
+    SetSoundVolume(SFX3, 0.5f);
+
     Base playerBase;
     Player player1;
+    Animation sprinterAnim, gruntAnim, heavyAnim;
 
     int highscore = 0;
     float accumulator = 0;
@@ -207,23 +301,37 @@ int main() {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
+
+    InitWindow(screenWidth, screenHeight, "SQUARE OFF");
+    SetTargetFPS(60); // Set the target frame rate
+
+    Texture2D sprinterSprite = LoadTexture("SPRINTER.png");
+    Texture2D gruntSprite = LoadTexture("GRUNT.png");
+    Texture2D heavySprite = LoadTexture("HEAVY.png");
+
+
+    InitAnimation(&sprinterAnim, sprinterSprite, 3, 16, 18);
+    InitAnimation(&gruntAnim, gruntSprite, 2, 16, 17);
+    InitAnimation(&heavyAnim, heavySprite, 4, 16, 17); 
+
     playerBase.health = 3;
     playerBase.radius = 50.0f;
     player1.radius = 20.0f;
     player1.isDragging = false;
-    player1.playerPos = {400,300};
+    player1.playerPos = {screenWidth / 2.0f, screenHeight / 2.0f};;
     player1.acceleration = {0,0};
 
-    InitWindow(screenWidth, screenHeight, "PLAYER MOVING");
-
-    Vector2 mouse_drag_start = Vector2Zero();
-    SetTargetFPS(60); // Set the target frame rate
+    Rectangle restartButton = {screenWidth / 2 - 50, screenHeight / 2 + 60, 100, 30};
 
     playerBase.basePos = {screenWidth / 2, screenHeight / 2};
+    player1.velocity = {0, 0};
+
+    Vector2 mouse_drag_start = Vector2Zero();
+    
 
     std::vector<Enemy> enemies;
     for (int i = 0; i < 3; ++i) {
-        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
+        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos, gruntAnim, sprinterAnim, heavyAnim));
     }
 
     float spawnTimer = 0.0f;
@@ -233,8 +341,16 @@ int main() {
         float delta_time = GetFrameTime();
         spawnTimer += delta_time;
 
+        if(!IsSoundPlaying(BGM)){
+            PlaySound(BGM);
+        }
+        
         if (playerBase.health <= 0) {
             isGameOver = true;
+            if(!gameOverSoundPlayed){
+                PlaySound(SFX2);
+                gameOverSoundPlayed = true;
+            }
             gameOverDelay -= delta_time;
         }
 
@@ -243,11 +359,13 @@ int main() {
             Vector2 cue_stick_force = Vector2Zero();
 
             if (player1.playerPos.x - player1.radius < 0 || player1.playerPos.x + player1.radius > screenWidth) {
+                PlaySound(SFX4);
                 player1.velocity.x *= -1;
                 player1.playerPos.x = Clamp(player1.playerPos.x, player1.radius, screenWidth - player1.radius);
             }
 
             if (player1.playerPos.y - player1.radius < 0 || player1.playerPos.y + player1.radius > screenHeight) {
+                PlaySound(SFX4);
                 player1.velocity.y *= -1;
                 player1.playerPos.y = Clamp(player1.playerPos.y, player1.radius, screenHeight - player1.radius);
             }
@@ -270,6 +388,7 @@ int main() {
                 Vector2 mouse_drag_end = GetMousePosition();
                 player1.velocity = Vector2Subtract(mouse_drag_start, mouse_drag_end);
                 player1.isDragging = false;
+                PlaySound(SFX1);
             }
 
             // Vector2 shot_dir = Vector2Subtract(mouse_position, mouse_drag_start);
@@ -292,16 +411,18 @@ int main() {
             if (spawnTimer >= spawnInterval) {
                 spawnTimer = 0.0f;
                 for (int i = 0; i < 1; i++) {
-                    enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
+                    enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos, gruntAnim, sprinterAnim, heavyAnim));
                 }
             }
 
             for (Enemy &enemy : enemies) {
-                updateEnemy(enemy, playerBase.basePos);
+                UpdateAnimation(&enemy.animation, enemy, delta_time);
+                updateEnemy(enemy, playerBase.basePos, delta_time);
                 health(enemy, player1, playerBase, delta_time);
 
                 if (enemy.enemyHealth <= 0) {
-                    enemy = createEnemy(screenWidth, screenHeight, playerBase.basePos);
+                    PlaySound(SFX5);
+                    enemy = createEnemy(screenWidth, screenHeight, playerBase.basePos, gruntAnim, sprinterAnim, heavyAnim);
                     score += 10;
                 }
             }
@@ -316,6 +437,7 @@ int main() {
 
             for (auto it = powerUps.begin(); it != powerUps.end(); /* no increment here */) {
                 if (CheckCollisionCircleRec(player1.playerPos, player1.radius, {it->position.x, it->position.y, 10, 10})) {
+                    PlaySound(SFX3);
                     applyPowerUp(player1, playerBase, enemies, *it);
                     it = powerUps.erase(it);
                 } else {
@@ -346,8 +468,8 @@ int main() {
                     case INCREASE_SCORE1:
                         DrawTriangle({ powerUp.position.x - 5, powerUp.position.y + 5 }, { powerUp.position.x + 5, powerUp.position.y + 5 }, { powerUp.position.x, powerUp.position.y - 5 }, PURPLE); // Purple triangle for immunity
                         break;
-                    case INCREASE_SCORE2:
-                        DrawLineV({ powerUp.position.x - 5, powerUp.position.y - 5 }, { powerUp.position.x + 5, powerUp.position.y + 5 }, ORANGE); // Orange line for freeze
+                    case SLOW:
+                        DrawLineV({ powerUp.position.x - 5, powerUp.position.y - 5 }, { powerUp.position.x + 5, powerUp.position.y + 5 }, ORANGE); 
                         DrawLineV({ powerUp.position.x - 5, powerUp.position.y + 5 }, { powerUp.position.x + 5, powerUp.position.y - 5 }, ORANGE);
                         break;
                 }
@@ -382,22 +504,26 @@ int main() {
         if (isGameOver && gameOverDelay <= 0) {
             // Draw game over message
             DrawText("Game Over", screenWidth / 2 - MeasureText("Game Over", 20) / 2, screenHeight / 2, 20, WHITE);
-            DrawText(TextFormat("High Score: %d", highscore), screenWidth / 2 - MeasureText("High Score: ", 20) / 2, screenHeight / 2 + 10, 20, WHITE);
-
-            Rectangle restartButton = {screenWidth / 2 - 50, screenHeight / 2 + 40, 100, 30};
+            DrawText(TextFormat("High Score: %d", highscore), screenWidth / 2 - MeasureText("High Score: ", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
             DrawRectangleRec(restartButton, GRAY);
-            DrawText("Restart", restartButton.x + 20, restartButton.y + 5, 20, BLACK);
+            DrawText("Restart", restartButton.x + 10, restartButton.y + 5, 20, BLACK);
 
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                 Vector2 mousePosition = GetMousePosition();
                 if (CheckCollisionPointRec(mousePosition, restartButton)) {
                     score = 0;
                     playerBase.health = 3;
+                    player1.playerPos = {screenWidth / 2.0f, screenHeight / 2.0f};
                     isGameOver = false;
                     gameOverDelay = 1.0f;
+                    spawnTimer = 0.0f;
+                    player1.velocity = {0, 0};
+                    player1.acceleration = {0, 0};
+                    player1.radius = 20.0f;
+                    gameOverSoundPlayed = false;
                     enemies.clear();
                     for (int i = 0; i < 3; ++i) {
-                        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos));
+                        enemies.push_back(createEnemy(screenWidth, screenHeight, playerBase.basePos, gruntAnim, sprinterAnim, heavyAnim));
                     }
                 }
             }
@@ -405,6 +531,22 @@ int main() {
 
         EndDrawing();
     }
+
+    UnloadTexture(sprinterSprite);
+    UnloadTexture(gruntSprite);
+    UnloadTexture(heavySprite);
+    free(sprinterAnim.frames);
+    free(gruntAnim.frames);
+    free(heavyAnim.frames);
+
+    UnloadSound(BGM);
+    UnloadSound(SFX1);
+    UnloadSound(SFX2);
+    UnloadSound(SFX3);
+    UnloadSound(SFX4);
+    UnloadSound(SFX5);
+    UnloadSound(SFX6);
+    CloseAudioDevice();
 
     CloseWindow();
 
